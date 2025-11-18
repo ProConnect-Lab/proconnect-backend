@@ -1,0 +1,378 @@
+openapi: 3.0.3
+info:
+  title: ProConnect API
+  description: >
+    API REST Laravel 12 utilisée par l'application mobile et le portail d'administration ProConnect.
+    Les endpoints publics `register/login` sont destinés aux clients mobiles, tandis que les routes `/api/admin/*`
+    alimentent le SPA web Tailwind/Vue décrit dans ce dépôt.
+  version: "1.0.0"
+servers:
+  - url: http://localhost:8000
+    description: Environnement local
+components:
+  securitySchemes:
+    SanctumToken:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+  schemas:
+    LoginPayload:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    ProfilePayload:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+    CompanyPayload:
+      type: object
+      required: [name, cfe_number, address]
+      properties:
+        name:
+          type: string
+        cfe_number:
+          type: string
+        address:
+          type: string
+    PostPayload:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+paths:
+  /api/register:
+    post:
+      summary: Inscription mobile (privé ou pro)
+      tags: [Mobile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirmation, account_type, address]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                password_confirmation:
+                  type: string
+                account_type:
+                  type: string
+                  enum: [private, pro]
+                address:
+                  type: string
+                company_name:
+                  type: string
+                cfe_number:
+                  type: string
+                company_address:
+                  type: string
+      responses:
+        "201":
+          description: Utilisateur créé
+  /api/login:
+    post:
+      summary: Connexion mobile (Sanctum)
+      tags: [Mobile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginPayload'
+      responses:
+        "200":
+          description: Jeton créé
+  /api/admin/login:
+    post:
+      summary: Connexion administrateur
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginPayload'
+      responses:
+        "200":
+          description: Jeton admin
+  /api/admin/logout:
+    post:
+      summary: Révoquer le jeton admin courant
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      responses:
+        "200":
+          description: Déconnexion confirmée
+  /api/admin/me:
+    get:
+      summary: Profil de l'administrateur connecté
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      responses:
+        "200":
+          description: Retourne l'objet admin
+  /api/admin/admins:
+    get:
+      summary: Lister tous les admins
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      responses:
+        "200":
+          description: Liste d'administrateurs
+    post:
+      summary: Créer un administrateur
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, address, password, password_confirmation]
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                address:
+                  type: string
+                account_type:
+                  type: string
+                  enum: [private, pro]
+                password:
+                  type: string
+                password_confirmation:
+                  type: string
+      responses:
+        "201":
+          description: Admin créé
+  /api/admin/users:
+    get:
+      summary: Rechercher les membres
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Résultats paginés
+  /api/admin/companies:
+    get:
+      summary: Rechercher les entreprises
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Résultats paginés
+  /api/admin/posts:
+    get:
+      summary: Rechercher les publications
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Résultats paginés
+  /api/admin/stats:
+    get:
+      summary: Statistiques globales
+      tags: [Admin]
+      security:
+        - SanctumToken: []
+      responses:
+        "200":
+          description: Totaux et listes récentes
+  /api/logout:
+    post:
+      summary: Déconnexion mobile
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      responses:
+        "200":
+          description: Jeton révoqué
+  /api/profile:
+    get:
+      summary: Profil utilisateur mobile
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      responses:
+        "200":
+          description: Profil détaillé
+    put:
+      summary: Mise à jour du profil
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfilePayload'
+      responses:
+        "200":
+          description: Profil mis à jour
+  /api/companies:
+    get:
+      summary: Lister les entreprises de l’utilisateur
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      responses:
+        "200":
+          description: Liste d’entreprises
+    post:
+      summary: Créer une entreprise
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyPayload'
+      responses:
+        "201":
+          description: Entreprise créée
+  /api/companies/{company}:
+    put:
+      summary: Modifier une entreprise
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: path
+          name: company
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyPayload'
+      responses:
+        "200":
+          description: Entreprise mise à jour
+    delete:
+      summary: Supprimer une entreprise
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: path
+          name: company
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Entreprise supprimée
+  /api/posts:
+    get:
+      summary: Lister les publications (recherche possible)
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Liste de publications
+    post:
+      summary: Créer une publication
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostPayload'
+      responses:
+        "201":
+          description: Publication créée
+  /api/posts/{post}:
+    put:
+      summary: Modifier une publication
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: path
+          name: post
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostPayload'
+      responses:
+        "200":
+          description: Publication mise à jour
+    delete:
+      summary: Supprimer une publication
+      tags: [Mobile]
+      security:
+        - SanctumToken: []
+      parameters:
+        - in: path
+          name: post
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Publication supprimée

@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../js/admin/**/*.js';
+@source '../js/admin/**/*.vue';
+
+@theme {
+    --font-sans: 'Inter', 'Inter var', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --color-brand-50: #f5f3ff;
+    --color-brand-100: #ede9fe;
+    --color-brand-500: #7c3aed;
+    --color-brand-700: #5b21b6;
+    --color-brand-900: #3b0764;
+}
+
+@layer base {
+    body {
+        font-family: var(--font-sans);
+        background-color: #0f172a;
+        color: #f8fafc;
+    }
+}

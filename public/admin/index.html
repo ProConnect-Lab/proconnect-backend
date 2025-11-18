@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProConnect Admin - Panneau d'administration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366F1',
+                        secondary: '#8B5CF6',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+        // Configuration API
+        const API_BASE_URL = window.location.origin + '/api';
+
+        // État global de l'application
+        const state = {
+            token: localStorage.getItem('admin_token'),
+            user: null,
+            currentPage: 'dashboard',
+            stats: null,
+            users: [],
+            companies: [],
+            posts: [],
+            admins: [],
+            allCompanies: [],
+            editingPost: null,
+            loading: false,
+            searchQuery: ''
+        };
+
+        // Fonction pour faire des requêtes API
+        async function apiCall(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            };
+
+            if (state.token) {
+                headers['Authorization'] = `Bearer ${state.token}`;
+            }
+
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                headers: { ...headers, ...options.headers }
+            });
+
+            if (response.status === 401) {
+                logout();
+                return null;
+            }
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Erreur API');
+            }
+
+            return data;
+        }
+
+        // Authentification
+        async function login(email, password) {
+            try {
+                const data = await apiCall('/admin/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ email, password })
+                });
+
+                state.token = data.token;
+                state.user = data.admin;
+                localStorage.setItem('admin_token', data.token);
+
+                await loadDashboard();
+                render();
+            } catch (error) {
+                alert('Erreur de connexion: ' + error.message);
+            }
+        }
+
+        function logout() {
+            state.token = null;
+            state.user = null;
+            localStorage.removeItem('admin_token');
+            render();
+        }
+
+        // Chargement des données
+        async function loadDashboard() {
+            state.loading = true;
+            render();
+
+            try {
+                state.stats = await apiCall('/admin/stats');
+                state.loading = false;
+                render();
+            } catch (error) {
+                console.error('Erreur:', error);
+                state.loading = false;
+                render();
+            }
+        }
+
+        async function loadUsers(search = '') {
+            state.loading = true;
+            render();
+
+            try {
+                const response = await apiCall(`/admin/users?search=${search}`);
+                state.users = response.data || [];
+                state.loading = false;
+                render();
+            } catch (error) {
+                console.error('Erreur:', error);
+                state.loading = false;
+                render();
+            }
+        }
+
+        async function loadCompanies(search = '') {
+            state.loading = true;
+            render();
+
+            try {
+                const response = await apiCall(`/admin/companies?search=${search}`);
+                state.companies = response.data || [];
+                state.loading = false;
+                render();
+            } catch (error) {
+                console.error('Erreur:', error);
+                state.loading = false;
+                render();
+            }
+        }
+
+        async function loadPosts(search = '') {
+            state.loading = true;
+            render();
+
+            try {
+                const response = await apiCall(`/admin/posts?search=${search}`);
+                state.posts = response.data || [];
+                state.loading = false;
+                render();
+            } catch (error) {
+                console.error('Erreur:', error);
+                state.loading = false;
+                render();
+            }
+        }
+
+        async function loadAdmins() {
+            state.loading = true;
+            render();
+
+            try {
+                const response = await apiCall('/admin/admins');
+                state.admins = response.data || [];
+                state.loading = false;
+                render();
+            } catch (error) {
+                console.error('Erreur:', error);
+                state.loading = false;
+                render();
+            }
+        }
+
+        async function createAdmin(formData) {
+            try {
+                await apiCall('/admin/admins', {
+                    method: 'POST',
+                    body: JSON.stringify(formData)
+                });
+
+                await loadAdmins();
+                alert('Administrateur créé avec succès');
+            } catch (error) {
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ? Toutes ses entreprises et publications seront également supprimées.')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                await loadUsers(state.searchQuery);
+                alert('Utilisateur supprimé avec succès');
+            } catch (error) {
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        async function deleteCompany(companyId) {
+            if (!confirm('Êtes-vous sûr de vouloir supprimer cette entreprise ? Toutes ses publications seront également supprimées.')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/admin/companies/${companyId}`, {
+                    method: 'DELETE'
+                });
+
+                await loadCompanies(state.searchQuery);
+                alert('Entreprise supprimée avec succès');
+            } catch (error) {
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        async function loadAllCompanies() {
+            try {
+                const response = await apiCall('/admin/companies/all');
+                state.allCompanies = response.companies || [];
+            } catch (error) {
+                console.error('Erreur chargement entreprises:', error);
+            }
+        }
+
+        async function createPost(formData) {
+            try {
+                await apiCall('/admin/posts', {
+                    method: 'POST',
+                    body: JSON.stringify(formData)
+                });
+
+                await loadPosts(state.searchQuery);
+                alert('Publication créée avec succès');
+            } catch (error) {
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        async function updatePost(postId, formData) {
+            try {
+                await apiCall(`/admin/posts/${postId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(formData)
+                });
+
+                await loadPosts(state.searchQuery);
+                alert('Publication modifiée avec succès');
+            } catch (error) {
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        async function deletePost(postId) {
+            if (!confirm('Êtes-vous sûr de vouloir supprimer cette publication ?')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/admin/posts/${postId}`, {
+                    method: 'DELETE'
+                });
+
+                await loadPosts(state.searchQuery);
+                alert('Publication supprimée avec succès');
+            } catch (error) {
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        // Navigation
+        function navigateTo(page) {
+            state.currentPage = page;
+
+            switch(page) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'users':
+                    loadUsers();
+                    break;
+                case 'companies':
+                    loadCompanies();
+                    break;
+                case 'posts':
+                    loadPosts();
+                    break;
+                case 'admins':
+                    loadAdmins();
+                    break;
+            }
+
+            render();
+        }
+
+        // Composants UI
+        function LoginPage() {
+            return `
+                <div class="min-h-screen gradient-bg flex items-center justify-center p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+                        <div class="text-center mb-8">
+                            <div class="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                                <i class="fas fa-shield-alt text-white text-3xl"></i>
+                            </div>
+                            <h1 class="text-3xl font-bold text-gray-800 mb-2">ProConnect Admin</h1>
+                            <p class="text-gray-600">Panneau d'administration</p>
+                        </div>
+
+                        <form onsubmit="event.preventDefault(); login(event.target.email.value, event.target.password.value);" class="space-y-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                <input type="email" name="email" required
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    placeholder="admin@proconnect.com">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
+                                <input type="password" name="password" required
+                                    class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    placeholder="••••••••">
+                            </div>
+
+                            <button type="submit"
+                                class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:scale-[1.02] transition duration-200">
+                                <i class="fas fa-sign-in-alt mr-2"></i>
+                                Se connecter
+                            </button>
+                        </form>
+
+                        <div class="mt-6 text-center text-sm text-gray-500">
+                            <p><i class="fas fa-info-circle mr-1"></i> Accès réservé aux administrateurs</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function Sidebar() {
+            const menuItems = [
+                { id: 'dashboard', icon: 'fa-chart-line', label: 'Tableau de bord' },
+                { id: 'users', icon: 'fa-users', label: 'Utilisateurs' },
+                { id: 'companies', icon: 'fa-building', label: 'Entreprises' },
+                { id: 'posts', icon: 'fa-file-alt', label: 'Publications' },
+                { id: 'admins', icon: 'fa-user-shield', label: 'Administrateurs' },
+            ];
+
+            return `
+                <div class="bg-gradient-to-b from-indigo-600 to-purple-700 text-white w-64 min-h-screen p-6">
+                    <div class="mb-8">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-12 h-12 bg-white bg-opacity-20 rounded-xl flex items-center justify-center">
+                                <i class="fas fa-shield-alt text-2xl"></i>
+                            </div>
+                            <div>
+                                <h2 class="font-bold text-lg">ProConnect</h2>
+                                <p class="text-sm text-indigo-200">Administration</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <nav class="space-y-2">
+                        ${menuItems.map(item => `
+                            <button onclick="navigateTo('${item.id}')"
+                                class="w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+                                    state.currentPage === item.id
+                                        ? 'bg-white bg-opacity-20 shadow-lg'
+                                        : 'hover:bg-white hover:bg-opacity-10'
+                                }">
+                                <i class="fas ${item.icon} text-lg"></i>
+                                <span class="font-medium">${item.label}</span>
+                            </button>
+                        `).join('')}
+                    </nav>
+
+                    <div class="mt-auto pt-8">
+                        <div class="bg-white bg-opacity-10 rounded-lg p-4 mb-4">
+                            <p class="text-sm text-indigo-200 mb-1">Connecté en tant que</p>
+                            <p class="font-semibold">${state.user?.name || 'Admin'}</p>
+                            <p class="text-xs text-indigo-200">${state.user?.email || ''}</p>
+                        </div>
+
+                        <button onclick="logout()"
+                            class="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-red-500 hover:bg-red-600 rounded-lg transition">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>Déconnexion</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function DashboardPage() {
+            if (state.loading) {
+                return `<div class="flex items-center justify-center h-full"><div class="text-xl">Chargement...</div></div>`;
+            }
+
+            const totals = state.stats?.totals || { users: 0, companies: 0, posts: 0, admins: 0 };
+
+            return `
+                <div class="p-8">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-8">Tableau de bord</h1>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-users text-blue-600 text-2xl"></i>
+                                </div>
+                                <span class="text-sm font-semibold text-green-600">
+                                    <i class="fas fa-arrow-up"></i> +12%
+                                </span>
+                            </div>
+                            <h3 class="text-gray-600 text-sm mb-1">Utilisateurs</h3>
+                            <p class="text-3xl font-bold text-gray-800">${totals.users}</p>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-purple-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-building text-purple-600 text-2xl"></i>
+                                </div>
+                                <span class="text-sm font-semibold text-green-600">
+                                    <i class="fas fa-arrow-up"></i> +8%
+                                </span>
+                            </div>
+                            <h3 class="text-gray-600 text-sm mb-1">Entreprises</h3>
+                            <p class="text-3xl font-bold text-gray-800">${totals.companies}</p>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-file-alt text-green-600 text-2xl"></i>
+                                </div>
+                                <span class="text-sm font-semibold text-green-600">
+                                    <i class="fas fa-arrow-up"></i> +15%
+                                </span>
+                            </div>
+                            <h3 class="text-gray-600 text-sm mb-1">Publications</h3>
+                            <p class="text-3xl font-bold text-gray-800">${totals.posts}</p>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-user-shield text-red-600 text-2xl"></i>
+                                </div>
+                            </div>
+                            <h3 class="text-gray-600 text-sm mb-1">Administrateurs</h3>
+                            <p class="text-3xl font-bold text-gray-800">${totals.admins}</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h2 class="text-xl font-bold text-gray-800 mb-4">Activité récente</h2>
+                            <div class="space-y-4">
+                                <p class="text-gray-600">Aucune activité récente</p>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl shadow-lg p-6">
+                            <h2 class="text-xl font-bold text-gray-800 mb-4">Statistiques</h2>
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Total utilisateurs</span>
+                                    <span class="font-bold">${totals.users}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Total entreprises</span>
+                                    <span class="font-bold">${totals.companies}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Total publications</span>
+                                    <span class="font-bold">${totals.posts}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function UsersPage() {
+            return `
+                <div class="p-8">
+                    <div class="flex justify-between items-center mb-8">
+                        <h1 class="text-3xl font-bold text-gray-800">Utilisateurs</h1>
+                        <div class="relative">
+                            <input type="text" placeholder="Rechercher..."
+                                onkeyup="state.searchQuery = this.value; loadUsers(this.value)"
+                                class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                    </div>
+
+                    ${state.loading ? '<div class="text-center">Chargement...</div>' : `
+                        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nom</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    ${state.users.map(user => `
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-6 py-4">${user.id}</td>
+                                            <td class="px-6 py-4 font-medium">${user.name}</td>
+                                            <td class="px-6 py-4">${user.email}</td>
+                                            <td class="px-6 py-4">
+                                                <span class="px-2 py-1 text-xs rounded-full ${user.account_type === 'pro' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}">
+                                                    ${user.account_type === 'pro' ? 'Professionnel' : 'Particulier'}
+                                                </span>
+                                            </td>
+                                            <td class="px-6 py-4 text-sm text-gray-500">${new Date(user.created_at).toLocaleDateString('fr-FR')}</td>
+                                            <td class="px-6 py-4">
+                                                <button onclick="deleteUser(${user.id})"
+                                                    class="text-red-600 hover:text-red-800">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function CompaniesPage() {
+            return `
+                <div class="p-8">
+                    <div class="flex justify-between items-center mb-8">
+                        <h1 class="text-3xl font-bold text-gray-800">Entreprises</h1>
+                        <input type="text" placeholder="Rechercher..."
+                            onkeyup="loadCompanies(this.value)"
+                            class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    </div>
+
+                    ${state.loading ? '<div class="text-center">Chargement...</div>' : `
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            ${state.companies.map(company => `
+                                <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                                    <div class="flex items-start justify-between mb-4">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                            <i class="fas fa-building text-white"></i>
+                                        </div>
+                                        <button onclick="deleteCompany(${company.id})"
+                                            class="text-red-600 hover:text-red-800">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-gray-800 mb-2">${company.name}</h3>
+                                    <p class="text-sm text-gray-600 mb-2"><i class="fas fa-hashtag mr-1"></i> CFE: ${company.cfe_number || 'N/A'}</p>
+                                    <p class="text-sm text-gray-600 mb-1"><i class="fas fa-map-marker-alt mr-1"></i> ${company.address || 'N/A'}</p>
+                                    <div class="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                                        <p class="text-xs text-gray-500">Propriétaire: ${company.owner?.name || 'N/A'}</p>
+                                        <span class="text-xs text-gray-500">${company.posts_count || 0} publications</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        function PostsPage() {
+            return `
+                <div class="p-8">
+                    <div class="flex justify-between items-center mb-8">
+                        <h1 class="text-3xl font-bold text-gray-800">Publications</h1>
+                        <div class="flex items-center space-x-4">
+                            <input type="text" placeholder="Rechercher..."
+                                onkeyup="loadPosts(this.value)"
+                                class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            <button onclick="showCreatePostModal()"
+                                class="px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg whitespace-nowrap">
+                                <i class="fas fa-plus mr-2"></i>Nouvelle publication
+                            </button>
+                        </div>
+                    </div>
+
+                    ${state.loading ? '<div class="text-center">Chargement...</div>' : `
+                        <div class="space-y-4">
+                            ${state.posts.map(post => `
+                                <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                                    <div class="flex items-start space-x-4">
+                                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <span class="text-white font-bold">${post.author?.name?.[0] || '?'}</span>
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <div>
+                                                    <h3 class="font-bold text-gray-800">${post.author?.name || 'Anonyme'}</h3>
+                                                    ${post.company ? `<p class="text-sm text-gray-500">${post.company.name}</p>` : ''}
+                                                </div>
+                                                <div class="flex items-center space-x-3">
+                                                    <span class="text-sm text-gray-500">${new Date(post.created_at).toLocaleDateString('fr-FR')}</span>
+                                                    ${post.author?.id === state.user?.id ? `
+                                                        <button onclick="showEditPostModal(${post.id}, '${post.title.replace(/'/g, "\\'")}', '${post.content.replace(/'/g, "\\'")}', ${post.company?.id || 'null'})"
+                                                            class="text-indigo-600 hover:text-indigo-800">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                    ` : ''}
+                                                    <button onclick="deletePost(${post.id})"
+                                                        class="text-red-600 hover:text-red-800">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">${post.title}</h4>
+                                            <p class="text-gray-600">${post.content}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+
+                    <!-- Modal Création Publication -->
+                    <div id="createPostModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div class="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4">
+                            <h2 class="text-2xl font-bold mb-6">Nouvelle publication</h2>
+                            <form onsubmit="event.preventDefault(); handleCreatePost(event);" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Titre</label>
+                                    <input type="text" name="title" required
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Contenu</label>
+                                    <textarea name="content" required rows="5"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Entreprise (optionnel)</label>
+                                    <select name="company_id"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                        <option value="">Aucune entreprise</option>
+                                        ${state.allCompanies.map(company => `
+                                            <option value="${company.id}">${company.name}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                                <div class="flex space-x-4 pt-4">
+                                    <button type="button" onclick="hideCreatePostModal()"
+                                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                        Annuler
+                                    </button>
+                                    <button type="submit"
+                                        class="flex-1 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg">
+                                        Créer
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Modal Édition Publication -->
+                    <div id="editPostModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div class="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4">
+                            <h2 class="text-2xl font-bold mb-6">Modifier la publication</h2>
+                            <form onsubmit="event.preventDefault(); handleEditPost(event);" class="space-y-4">
+                                <input type="hidden" name="post_id" id="edit_post_id">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Titre</label>
+                                    <input type="text" name="title" id="edit_title" required
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Contenu</label>
+                                    <textarea name="content" id="edit_content" required rows="5"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"></textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Entreprise (optionnel)</label>
+                                    <select name="company_id" id="edit_company_id"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                        <option value="">Aucune entreprise</option>
+                                        ${state.allCompanies.map(company => `
+                                            <option value="${company.id}">${company.name}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                                <div class="flex space-x-4 pt-4">
+                                    <button type="button" onclick="hideEditPostModal()"
+                                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                        Annuler
+                                    </button>
+                                    <button type="submit"
+                                        class="flex-1 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg">
+                                        Modifier
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function AdminsPage() {
+            return `
+                <div class="p-8">
+                    <div class="flex justify-between items-center mb-8">
+                        <h1 class="text-3xl font-bold text-gray-800">Administrateurs</h1>
+                        <button onclick="showCreateAdminModal()"
+                            class="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg font-semibold hover:shadow-lg">
+                            <i class="fas fa-plus mr-2"></i>Nouvel administrateur
+                        </button>
+                    </div>
+
+                    ${state.loading ? '<div class="text-center">Chargement...</div>' : `
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            ${state.admins.map(admin => `
+                                <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                                    <div class="flex items-center space-x-4 mb-4">
+                                        <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center">
+                                            <span class="text-white font-bold text-xl">${admin.name[0]}</span>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-gray-800">${admin.name}</h3>
+                                            <p class="text-sm text-gray-600">${admin.email}</p>
+                                        </div>
+                                    </div>
+                                    <div class="pt-4 border-t border-gray-200">
+                                        <p class="text-xs text-gray-500">Créé le ${new Date(admin.created_at).toLocaleDateString('fr-FR')}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+
+                    <div id="createAdminModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4">
+                            <h2 class="text-2xl font-bold mb-6">Nouvel administrateur</h2>
+                            <form onsubmit="event.preventDefault(); handleCreateAdmin(event);" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Nom</label>
+                                    <input type="text" name="name" required
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                                    <input type="email" name="email" required
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Adresse</label>
+                                    <input type="text" name="address" required
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Mot de passe</label>
+                                    <input type="password" name="password" required minlength="8"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Confirmer le mot de passe</label>
+                                    <input type="password" name="password_confirmation" required minlength="8"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                </div>
+                                <div class="flex space-x-4 pt-4">
+                                    <button type="button" onclick="hideCreateAdminModal()"
+                                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                                        Annuler
+                                    </button>
+                                    <button type="submit"
+                                        class="flex-1 px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-lg">
+                                        Créer
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showCreateAdminModal() {
+            document.getElementById('createAdminModal').classList.remove('hidden');
+        }
+
+        function hideCreateAdminModal() {
+            document.getElementById('createAdminModal').classList.add('hidden');
+        }
+
+        async function showCreatePostModal() {
+            await loadAllCompanies();
+            render();
+            setTimeout(() => {
+                document.getElementById('createPostModal').classList.remove('hidden');
+            }, 100);
+        }
+
+        function hideCreatePostModal() {
+            document.getElementById('createPostModal').classList.add('hidden');
+        }
+
+        async function showEditPostModal(postId, title, content, companyId) {
+            await loadAllCompanies();
+            state.editingPost = postId;
+            render();
+
+            setTimeout(() => {
+                document.getElementById('edit_post_id').value = postId;
+                document.getElementById('edit_title').value = title;
+                document.getElementById('edit_content').value = content;
+                document.getElementById('edit_company_id').value = companyId || '';
+                document.getElementById('editPostModal').classList.remove('hidden');
+            }, 100);
+        }
+
+        function hideEditPostModal() {
+            document.getElementById('editPostModal').classList.add('hidden');
+            state.editingPost = null;
+        }
+
+        async function handleCreatePost(event) {
+            const formData = {
+                title: event.target.title.value,
+                content: event.target.content.value,
+                company_id: event.target.company_id.value || null
+            };
+
+            await createPost(formData);
+            hideCreatePostModal();
+            event.target.reset();
+        }
+
+        async function handleEditPost(event) {
+            const postId = document.getElementById('edit_post_id').value;
+            const formData = {
+                title: event.target.title.value,
+                content: event.target.content.value,
+                company_id: event.target.company_id.value || null
+            };
+
+            await updatePost(postId, formData);
+            hideEditPostModal();
+        }
+
+        async function handleCreateAdmin(event) {
+            const formData = {
+                name: event.target.name.value,
+                email: event.target.email.value,
+                address: event.target.address.value,
+                password: event.target.password.value,
+                password_confirmation: event.target.password_confirmation.value
+            };
+
+            await createAdmin(formData);
+            hideCreateAdminModal();
+            event.target.reset();
+        }
+
+        function AdminLayout() {
+            let content = '';
+
+            switch(state.currentPage) {
+                case 'dashboard':
+                    content = DashboardPage();
+                    break;
+                case 'users':
+                    content = UsersPage();
+                    break;
+                case 'companies':
+                    content = CompaniesPage();
+                    break;
+                case 'posts':
+                    content = PostsPage();
+                    break;
+                case 'admins':
+                    content = AdminsPage();
+                    break;
+            }
+
+            return `
+                <div class="flex min-h-screen">
+                    ${Sidebar()}
+                    <div class="flex-1 overflow-auto bg-gray-50">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Rendu principal
+        function render() {
+            const app = document.getElementById('app');
+
+            if (!state.token) {
+                app.innerHTML = LoginPage();
+            } else {
+                app.innerHTML = AdminLayout();
+            }
+        }
+
+        // Initialisation
+        async function init() {
+            if (state.token) {
+                try {
+                    state.user = await apiCall('/admin/me');
+                    await loadDashboard();
+                } catch (error) {
+                    logout();
+                }
+            }
+            render();
+        }
+
+        // Démarrage
+        init();
+    </script>
+</body>
+</html>

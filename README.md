@@ -81,7 +81,7 @@ L'application sera accessible sur :
 
 - **API mobile** : http://localhost:8000/api/...
 - **Portail admin** : http://localhost:8000/admin
-  **Identifiants par défaut** : `admin@proconnect.test` / `password123`
+  **Identifiants par défaut** : `admin@proconnect.test` / `password`
 - **Documentation Swagger** : http://localhost:8000/docs
 
 **Note** : L'interface admin est une SPA en Vanilla JavaScript utilisant Tailwind CSS via CDN. Aucun build npm n'est nécessaire - tous les assets sont chargés directement depuis le fichier `public/admin/index.html`.
@@ -118,7 +118,7 @@ Définis les variables suivantes (dans `.env`, Render, etc.) pour ajuster les in
 ```
 ADMIN_NAME="Admin ProConnect"
 ADMIN_EMAIL=admin@proconnect.test
-ADMIN_PASSWORD=password123
+ADMIN_PASSWORD=password
 ADMIN_ADDRESS="Siège ProConnect"
 ADMIN_ACCOUNT_TYPE=pro
 ```
@@ -226,123 +226,7 @@ php artisan test
 php artisan test --coverage
 ```
 
-### Déploiement sur Render.com
 
-#### 1. Créer une base de données PostgreSQL
-
-1. Aller sur le dashboard Render.com
-2. Cliquer sur "New +" → "PostgreSQL"
-3. Configurer la base :
-   - Name: `proconnect-db`
-   - Database: `proconnect`
-   - User: (généré automatiquement)
-4. Noter les informations de connexion (Internal Database URL)
-
-#### 2. Créer le Web Service
-
-1. Cliquer sur "New +" → "Web Service"
-2. Connecter votre repository GitHub
-3. Configurer le service :
-   - **Name**: `proconnect-api`
-   - **Region**: Frankfurt (ou le plus proche)
-   - **Branch**: `main`
-   - **Root Directory**: `backend`
-   - **Environment**: `Docker`
-   - **Plan**: Free
-
-#### 3. Variables d'environnement à configurer
-
-**Variables essentielles** (à ajouter dans l'onglet "Environment") :
-
-```bash
-# Application
-APP_NAME=ProConnect
-APP_ENV=production
-APP_KEY=base64:...  # Générer avec: php artisan key:generate --show
-APP_DEBUG=false
-APP_URL=https://votre-app.onrender.com
-
-# Base de données PostgreSQL (copier depuis Render Database)
-DB_CONNECTION=pgsql
-DB_HOST=dpg-xxxxx.frankfurt-postgres.render.com
-DB_PORT=5432
-DB_DATABASE=proconnect
-DB_USERNAME=proconnect_user
-DB_PASSWORD=xxxxxxxxxxxxxxx
-
-# Sanctum (important pour CORS et cookies)
-SANCTUM_STATEFUL_DOMAINS=votre-app.onrender.com
-SESSION_DOMAIN=.onrender.com
-
-# L5-Swagger
-L5_SWAGGER_CONST_HOST=https://votre-app.onrender.com
-
-# Optionnel : désactiver migrations auto si vous préférez les lancer manuellement
-# RUN_MIGRATIONS=false
-```
-
-**Important** : Remplacer `votre-app` par le nom réel de votre service Render.
-
-#### 4. Déploiement
-
-Render détectera automatiquement le `Dockerfile` et lancera le build :
-
-1. Installation de PHP et extensions
-2. Installation des dépendances Composer
-3. Optimisation (cache config, routes, views)
-4. Migrations automatiques (si `RUN_MIGRATIONS=true`)
-5. Démarrage du serveur sur le port 10000
-
-**Temps de build initial** : 3-5 minutes
-
-#### 5. Créer le premier administrateur
-
-Si le seeder ne s'est pas exécuté automatiquement :
-
-```bash
-# Via le Shell Render (dashboard → votre service → Shell)
-php artisan db:seed --class=DatabaseSeeder
-```
-
-Cela créera :
-- **Email**: admin@proconnect.test
-- **Password**: password123
-
-**⚠️ Changez ce mot de passe immédiatement en production !**
-
-#### 6. URLs de l'application
-
-Une fois déployé :
-
-- **API mobile** : `https://votre-app.onrender.com/api/...`
-- **Interface admin** : `https://votre-app.onrender.com/admin`
-- **Documentation Swagger** : `https://votre-app.onrender.com/docs`
-- **Health check** : `https://votre-app.onrender.com/up`
-
-#### 7. Résolution de problèmes courants
-
-**Mixed Content Error (HTTP/HTTPS)**
-
-Si Swagger ou d'autres assets chargent en HTTP au lieu de HTTPS :
-
-✅ **Solution** : Le code inclut déjà `URL::forceScheme('https')` dans `AppServiceProvider.php` pour forcer HTTPS en production.
-
-**Interface admin vide**
-
-✅ **Solution** : Vérifier que `public/admin/index.html` existe dans le repository et a été correctement déployé.
-
-**Erreur 500 après migration**
-
-```bash
-# Se connecter au Shell Render et vider le cache
-php artisan config:clear
-php artisan cache:clear
-php artisan route:clear
-```
-
-**Base de données non accessible**
-
-Vérifier que :
 - Les variables `DB_*` correspondent exactement à celles fournies par Render
 - Le service web et la base de données sont dans la même région
 - L'Internal Database URL est utilisée (pas l'External)
@@ -408,25 +292,7 @@ if ($this->app->environment('production')) {
     URL::forceScheme('https');
 }
 ```
-
-### Application Mobile Flutter
-
-L'application mobile est située dans le dossier `frontend/` et utilise :
-
-- **Framework** : Flutter avec GetX pour la gestion d'état
-- **Design** : Material Design 3 avec Google Fonts (Inter)
-- **Animations** : flutter_animate pour les transitions fluides
-- **Stockage** : flutter_secure_storage pour la persistance de session
-- **HTTP** : Dio pour les appels API
-
-**Fonctionnalités** :
-- ✅ Design professionnel avec composants premium (PremiumCard, GradientHeader)
-- ✅ Animations d'entrée et transitions (fade, slide, scale)
-- ✅ Pull-to-refresh sur tous les onglets
-- ✅ Shimmer loading pendant le chargement des données
-- ✅ Édition de profil avec validation
-- ✅ CRUD complet des entreprises avec animations
-- ✅ Publications avec recherche, filtres et bottom sheet de détails
+ détails
 - ✅ Gestion des erreurs avec snackbars contextuelles
 - ✅ Navigation personnalisée avec bottom bar animée
 
@@ -439,45 +305,13 @@ L'application mobile est située dans le dossier `frontend/` et utilise :
 - PostgreSQL (production) / MySQL (développement)
 - L5-Swagger (documentation OpenAPI)
 
-**Frontend Mobile** :
-- Flutter 3.x
-- GetX (state management)
-- Google Fonts
-- flutter_animate
-- flutter_secure_storage
-- Dio
-
 **Frontend Admin** :
-- Vanilla JavaScript (ES6+)
 - Tailwind CSS 3.x (via CDN)
 - Font Awesome 6.x (icônes)
 - Fetch API (requêtes HTTP)
 
-### Support et Contribution
 
-**Signaler un bug** :
-Ouvrir une issue sur le repository GitHub avec :
-- Description du problème
-- Étapes pour reproduire
-- Logs pertinents
-- Version de l'application
-
-**Contribuer** :
-1. Fork le projet
-2. Créer une branche feature (`git checkout -b feature/AmazingFeature`)
-3. Commit les changements (`git commit -m 'Add AmazingFeature'`)
-4. Push vers la branche (`git push origin feature/AmazingFeature`)
-5. Ouvrir une Pull Request
-
-### Licence
-
-Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
 ### Auteurs
 
-Développé pour ProConnect - Plateforme de mise en relation professionnelle.
-
----
-
-**Version** : 1.0.0
-**Dernière mise à jour** : Novembre 2025
+Développé par BALOGOU Urbain dans le cadre d'un test technique - Plateforme de mise en relation professionnelle.
